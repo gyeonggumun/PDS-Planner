@@ -1,212 +1,247 @@
 const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
-const multer = require('multer');
-const { v4: uuidv4 } = require('uuid');
-const db = require('./db');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
-app.use(cors({ origin: '*' }));
+const PORT = process.env.PORT || 3000;
+
+// CORS 설정 (프론트엔드 연결 허용)
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:4173',
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.some(o => origin.endsWith('.vercel.app'))) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS 정책에 의해 차단된 접근입니다.'));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json());
 
-// 파일 업로드 메모리 스토리지 (백업 복원용)
-const upload = multer({ storage: multer.memoryStorage() });
+// 데이터베이스 초기화 (파일 기반 또는 메모리)
+const dbFile = path.join(__dirname, 'pds.db');
+const db = new sqlite3.Database(dbFile, (err) => {
+  if (err) console.error('DB 연결 실패:', err.message);
+  else console.log('SQLite 데이터베이스 연결 완료');
+});
 
-// --- A/B 격리 강제 미들웨어 (카드 5) ---
-app.use((req, res, next) => {
+// 테이블 생성
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS plans (
+    id TEXT PRIMARY KEY,
+    owner TEXT NOT NULL,
+    title TEXT NOT NULL,
+    period TEXT NOT NULL,
+    success_criteria TEXT,
+    expected_time INTEGER
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS todos (
+    id TEXT PRIMARY KEY,
+    plan_id TEXT NOT NULL,
+    owner TEXT NOT NULL,
+    content TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    expected_time INTEGER,
+    deadline TEXT
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS dos (
+    id TEXT PRIMARY KEY,
+    todo_id TEXT NOT NULL,
+    owner TEXT NOT NULL,
+    start_time TEXT,
+    end_time TEXT,
+    actual_time INTEGER,
+    block_reason TEXT
+  )`);
+});
+
+// A/B 범위 격리 미들웨어 (서버 강제 검증)
+const scopeIsolation = (req, res, next) => {
   const scope = req.headers['x-scope-id'];
   if (!scope || (scope !== 'A' && scope !== 'B')) {
-    return res.status(403).json({ error: "검토 범위(A/B)가 필요합니다." });
+    return res.status(403).json({ error: '유효하지 않은 검토 범위(Scope)입니다.' });
   }
-  req.userScope = scope; 
+  req.scope = scope;
   next();
+};
+
+app.use('/api', scopeIsolation);
+
+// --- [API 라우트] ---
+
+// 1. Plan 목록 조회
+app.get('/api/plans', (req, res) => {
+  db.all(`SELECT * FROM plans WHERE owner = ?`, [req.scope], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
 });
 
-// 비동기 쿼리 래퍼
-const runAsync = (query, params = []) => new Promise((resolve, reject) => {
-  db.run(query, params, function (err) { err ? reject(err) : resolve(this); });
-});
-const allAsync = (query, params = []) => new Promise((resolve, reject) => {
-  db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows));
-});
-const getAsync = (query, params = []) => new Promise((resolve, reject) => {
-  db.get(query, params, (err, row) => err ? reject(err) : resolve(row));
-});
-
-// ==========================================
-// 1. Plan & ToDo CRUD (카드 1)[cite: 1]
-// ==========================================
-
-// 모든 Plan 조회
-app.get('/api/plans', async (req, res) => {
-  try {
-    const plans = await allAsync('SELECT * FROM plans WHERE owner = ?', [req.userScope]);
-    res.json(plans);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// 새 Plan 생성 (기간, 우선순위, 성공기준, 예상시간 포함)[cite: 1]
-app.post('/api/plans', async (req, res) => {
-  const { title, period, priority, success_criteria, expected_time } = req.body;
-  const id = uuidv4();
-  try {
-    await runAsync(
-      `INSERT INTO plans (id, owner, title, period, priority, success_criteria, expected_time) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, req.userScope, title, period, priority, success_criteria, expected_time]
-    );
-    res.json({ message: "Plan이 생성되었습니다.", id });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// 모든 ToDo 조회
-app.get('/api/todos', async (req, res) => {
-  try {
-    const todos = await allAsync('SELECT * FROM todos WHERE owner = ?', [req.userScope]);
-    res.json(todos);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// 새 ToDo 생성 (마감일, 우선순위, 태그, 예상시간 포함)[cite: 1]
-app.post('/api/todos', async (req, res) => {
-  const { plan_id, content, deadline, priority, tags, expected_time } = req.body;
-  const id = uuidv4();
-  try {
-    await runAsync(
-      `INSERT INTO todos (id, plan_id, owner, content, deadline, priority, tags, expected_time) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, plan_id, req.userScope, content, deadline, priority, tags, expected_time]
-    );
-    res.json({ message: "ToDo가 생성되었습니다.", id });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ToDo 수정[cite: 1]
-app.put('/api/todos/:id', async (req, res) => {
-  const { content, deadline, priority, tags, expected_time } = req.body;
-  try {
-    const result = await runAsync(
-      `UPDATE todos SET content = ?, deadline = ?, priority = ?, tags = ?, expected_time = ? 
-       WHERE id = ? AND owner = ?`,
-      [content, deadline, priority, tags, expected_time, req.params.id, req.userScope]
-    );
-    if (result.changes === 0) return res.status(404).json({ error: "권한이 없거나 찾을 수 없습니다." });
-    res.json({ message: "ToDo가 수정되었습니다." });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ToDo 삭제[cite: 1]
-app.delete('/api/todos/:id', async (req, res) => {
-  try {
-    await runAsync('BEGIN TRANSACTION');
-    // 연관된 Do 기록 먼저 삭제 후 ToDo 삭제
-    await runAsync(`DELETE FROM do_records WHERE todo_id = ? AND owner = ?`, [req.params.id, req.userScope]);
-    const result = await runAsync(`DELETE FROM todos WHERE id = ? AND owner = ?`, [req.params.id, req.userScope]);
-    await runAsync('COMMIT');
-    
-    if (result.changes === 0) return res.status(404).json({ error: "권한이 없거나 찾을 수 없습니다." });
-    res.json({ message: "ToDo가 삭제되었습니다." });
-  } catch (err) {
-    await runAsync('ROLLBACK');
-    res.status(500).json({ error: err.message }); 
-  }
-});
-
-// ==========================================
-// 2. Do 기록 및 중복 완료 방지 (카드 2)[cite: 1]
-// ==========================================
-app.post('/api/todos/:id/complete', async (req, res) => {
-  const todoId = req.params.id;
-  const { idempotency_key, actual_time, block_reason } = req.body;
+// 2. Plan 생성
+app.post('/api/plans', (req, res) => {
+  const { id, title, period, success_criteria, expected_time } = req.body;
+  const planId = id || crypto.randomUUID();
   
-  try {
-    const row = await getAsync(`SELECT id FROM todos WHERE id = ? AND owner = ?`, [todoId, req.userScope]);
-    if (!row) return res.status(404).json({ error: "권한이 없거나 찾을 수 없습니다." });
-
-    await runAsync(
-      `INSERT INTO do_records (id, todo_id, owner, actual_time, block_reason, idempotency_key) VALUES (?, ?, ?, ?, ?, ?)`,
-      [uuidv4(), todoId, req.userScope, actual_time, block_reason, idempotency_key]
-    );
-    await runAsync(`UPDATE todos SET status = 'completed' WHERE id = ?`, [todoId]);
-    res.json({ message: "완료 처리되었습니다." });
-  } catch (err) {
-    if (err.message.includes('UNIQUE constraint failed')) {
-      return res.status(200).json({ message: "이미 처리된 완료 요청입니다." });
+  db.run(
+    `INSERT INTO plans (id, owner, title, period, success_criteria, expected_time) VALUES (?, ?, ?, ?, ?, ?)`,
+    [planId, req.scope, title, period, success_criteria || '', expected_time || 0],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, id: planId });
     }
-    res.status(500).json({ error: err.message });
-  }
+  );
 });
 
-// 진행 상태로 되돌리기 (T06-C12)[cite: 1]
-app.post('/api/todos/:id/revert', async (req, res) => {
-  try {
-    const result = await runAsync(`UPDATE todos SET status = 'pending' WHERE id = ? AND owner = ?`, [req.params.id, req.userScope]);
-    if (result.changes === 0) return res.status(404).json({ error: "권한 없음" });
-    res.json({ message: "진행 상태로 변경되었습니다." });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+// 3. ToDo 목록 조회
+app.get('/api/todos', (req, res) => {
+  db.all(`SELECT * FROM todos WHERE owner = ?`, [req.scope], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
 });
 
-// ==========================================
-// 3. 백업 및 복원 (카드 4)[cite: 1]
-// ==========================================
-app.get('/api/backup/export', async (req, res) => {
-  try {
-    const plans = await allAsync('SELECT * FROM plans WHERE owner = ?', [req.userScope]);
-    const todos = await allAsync('SELECT * FROM todos WHERE owner = ?', [req.userScope]);
-    const doRecords = await allAsync('SELECT * FROM do_records WHERE owner = ?', [req.userScope]);
-    res.setHeader('Content-Type', 'application/json');
-    res.json({ plans, todos, doRecords });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
+// 4. ToDo 생성
+app.post('/api/todos', (req, res) => {
+  const { id, plan_id, content, status, expected_time, deadline } = req.body;
+  const todoId = id || crypto.randomUUID();
 
-app.delete('/api/backup/all', async (req, res) => {
-  try {
-    await runAsync('BEGIN TRANSACTION');
-    await runAsync('DELETE FROM do_records WHERE owner = ?', [req.userScope]);
-    await runAsync('DELETE FROM todos WHERE owner = ?', [req.userScope]);
-    await runAsync('DELETE FROM plans WHERE owner = ?', [req.userScope]);
-    await runAsync('COMMIT');
-    res.json({ message: "삭제 완료" });
-  } catch (err) {
-    await runAsync('ROLLBACK');
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/backup/import', upload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "파일 누락" });
-  try {
-    const data = JSON.parse(req.file.buffer.toString());
-    await runAsync('BEGIN TRANSACTION');
-    // 복원 로직 단순화 (실제로는 필드 유효성 검사 필수)
-    if (data.plans) {
-      for (const p of data.plans) await runAsync(`INSERT OR IGNORE INTO plans (id, owner, title) VALUES (?, ?, ?)`, [p.id, req.userScope, p.title]);
+  db.run(
+    `INSERT INTO todos (id, plan_id, owner, content, status, expected_time, deadline) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [todoId, plan_id, req.scope, content, status || 'pending', expected_time || 60, deadline || null],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, id: todoId });
     }
-    await runAsync('COMMIT');
-    res.json({ message: "복원 완료" });
-  } catch (err) {
-    await runAsync('ROLLBACK');
-    res.status(400).json({ error: err.message });
-  }
+  );
 });
 
-// ==========================================
-// 4. See 집계 (카드 3)[cite: 1]
-// ==========================================
-app.get('/api/plans/:plan_id/see', async (req, res) => {
-  try {
-    const total = await getAsync(`SELECT COUNT(id) as cnt, COALESCE(SUM(expected_time), 0) as exp FROM todos WHERE plan_id = ? AND owner = ?`, [req.params.plan_id, req.userScope]);
-    const completed = await getAsync(`SELECT COUNT(id) as cnt FROM todos WHERE plan_id = ? AND owner = ? AND status = 'completed'`, [req.params.plan_id, req.userScope]);
-    res.json({
-      plan_id: req.params.plan_id,
-      total_todos: total.cnt,
-      completed_todos: completed.cnt,
-      delayed_todos: 0, // 상세 쿼리는 이전 답변 참조
-      blocked_todos: 0,
-      expected_time: total.exp,
-      actual_time: 0,
-      diff_time: 0
+// 5. ToDo 완료 처리 (중복 방지 멱등성 적용)
+app.post('/api/todos/:id/complete', (req, res) => {
+  const todoId = req.params.id;
+  const { start_time, end_time, actual_time, block_reason } = req.body;
+
+  db.get(`SELECT * FROM todos WHERE id = ? AND owner = ?`, [todoId, req.scope], (err, todo) => {
+    if (err || !todo) return res.status(404).json({ error: '대상을 찾을 수 없습니다.' });
+
+    // 이미 완료된 경우 중복 반영 방지
+    if (todo.status === 'completed') {
+      return res.json({ success: true, message: '이미 완료된 항목입니다. (중복 방지 적용)' });
+    }
+
+    db.serialize(() => {
+      db.run(`UPDATE todos SET status = 'completed' WHERE id = ? AND owner = ?`, [todoId, req.scope]);
+      
+      const doId = crypto.randomUUID();
+      db.run(
+        `INSERT INTO dos (id, todo_id, owner, start_time, end_time, actual_time, block_reason) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [doId, todoId, req.scope, start_time || new Date().toISOString(), end_time || new Date().toISOString(), actual_time || 60, block_reason || '']
+      );
+
+      res.json({ success: true, message: '완료 처리 및 실행 기록 저장 완료' });
     });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  });
 });
 
-app.listen(3000, () => console.log('서버가 3000번 포트에서 실행 중입니다.'));
+// 6. See 회고 분석 리포트 집계
+app.get('/api/plans/:id/see', (req, res) => {
+  const planId = req.params.id;
+
+  db.all(`SELECT * FROM todos WHERE plan_id = ? AND owner = ?`, [planId, req.scope], (err, todos) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    const total_todos = todos.length;
+    const completed_todos = todos.filter(t => t.status === 'completed').length;
+    
+    // 지연 건수 계산 (완료되지 않았고 마감일이 지난 경우)
+    const now = new Date();
+    const delayed_todos = todos.filter(t => t.status !== 'completed' && t.deadline && new Date(t.deadline) < now).length;
+
+    db.all(`SELECT dos.* FROM dos JOIN todos ON dos.todo_id = todos.id WHERE todos.plan_id = ? AND dos.owner = ?`, [planId, req.scope], (err, dos) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      const blocked_todos = dos.filter(d => d.block_reason && d.block_reason.trim() !== '').length;
+      
+      const expected_time = todos.reduce((acc, t) => acc + (t.expected_time || 0), 0);
+      const actual_time = dos.reduce((acc, d) => acc + (d.actual_time || 0), 0);
+      const diff_time = actual_time - expected_time;
+
+      res.json({
+        plan_id: planId,
+        total_todos,
+        completed_todos,
+        delayed_todos,
+        blocked_todos,
+        expected_time,
+        actual_time,
+        diff_time
+      });
+    });
+  });
+});
+
+// 7. [테스트용] 풍부한 See 회고 데이터 주입 API
+app.post('/api/debug/seed', (req, res) => {
+  const scope = req.scope;
+  const planId = 'sample-plan-' + Date.now();
+  
+  db.serialize(() => {
+    db.run(
+      `INSERT INTO plans (id, owner, title, period, success_criteria, expected_time) VALUES (?, ?, ?, ?, ?, ?)`,
+      [planId, scope, '정보처리기사 실기 집중 대비 (샘플)', '7일', '모든 파트 마스터', 600]
+    );
+
+    const sampleTodos = [
+      { id: crypto.randomUUID(), content: '요구사항 분석 마스터', status: 'completed', expected: 120 },
+      { id: crypto.randomUUID(), content: '데이터베이스 실무 응용 (지연)', status: 'pending', expected: 180, deadline: '2025-01-01T00:00:00.000Z' },
+      { id: crypto.randomUUID(), content: '네트워크 보안 설정 (막힘)', status: 'pending', expected: 150 },
+      { id: crypto.randomUUID(), content: '운영체제 핵심 요약', status: 'completed', expected: 150 }
+    ];
+
+    sampleTodos.forEach(t => {
+      db.run(
+        `INSERT INTO todos (id, plan_id, owner, content, status, expected_time, deadline) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [t.id, planId, scope, t.content, t.status, t.expected, t.deadline || null]
+      );
+
+      if (t.status === 'completed') {
+        db.run(
+          `INSERT INTO dos (id, todo_id, owner, start_time, end_time, actual_time, block_reason) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [crypto.randomUUID(), t.id, scope, new Date().toISOString(), new Date().toISOString(), t.expected + 45, '']
+        );
+      } else if (t.content.includes('막힘')) {
+        db.run(
+          `INSERT INTO dos (id, todo_id, owner, start_time, end_time, actual_time, block_reason) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [crypto.randomUUID(), t.id, scope, new Date().toISOString(), new Date().toISOString(), 60, '개념 이해가 어려워 멈춤']
+        );
+      }
+    });
+
+    res.json({ success: true, message: '샘플 데이터 주입 완료', planId });
+  });
+});
+
+// 8. 전체 삭제 (Purge)
+app.delete('/api/backup/all', (req, res) => {
+  db.serialize(() => {
+    db.run(`DELETE FROM dos WHERE owner = ?`, [req.scope]);
+    db.run(`DELETE FROM todos WHERE owner = ?`, [req.scope]);
+    db.run(`DELETE FROM plans WHERE owner = ?`, [req.scope]);
+    res.json({ success: true, message: '격리 범위 데이터 전체 삭제 완료' });
+  });
+});
+
+// 서버 실행
+app.listen(PORT, () => {
+  console.log(`백엔드 서버 실행 중: 포트 ${PORT}`);
+});

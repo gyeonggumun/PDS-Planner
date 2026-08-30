@@ -38,6 +38,17 @@ export default function BackupManager({ scope }) {
     }
   };
 
+  // [추가] 샘플 데이터 주입 핸들러
+  const handleSeedData = async () => {
+    try {
+      await fetchApi('/debug/seed', { method: 'POST' });
+      alert('테스트용 샘플 데이터가 성공적으로 생성되었습니다!');
+      window.location.reload();
+    } catch (e) {
+      alert('샘플 데이터 생성 실패');
+    }
+  };
+
   return (
     <div style={{ backgroundColor: '#ffffff', padding: '16px 24px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' }}>
       <div>
@@ -46,6 +57,11 @@ export default function BackupManager({ scope }) {
       </div>
       
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        {/* 샘플 데이터 주입 버튼 추가 */}
+        <button onClick={handleSeedData} style={{ padding: '8px 12px', backgroundColor: '#e0e7ff', color: '#3730a3', border: '1px solid #c7d2fe', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer' }}>
+          ⚡ 샘플 데이터 채우기
+        </button>
+
         <button onClick={handleExport} style={{ padding: '8px 12px', backgroundColor: '#ffffff', color: '#334155', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '500', cursor: 'pointer' }}>
           Export JSON
         </button>
