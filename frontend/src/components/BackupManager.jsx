@@ -16,7 +16,7 @@ export default function BackupManager({ scope }) {
   };
 
   const handleDeleteAll = async () => {
-    if (!window.confirm(`[경고] 정말로 ${scope} 인물의 모든 데이터를 삭제하시겠습니까?`)) return;
+    if (!window.confirm(`[보안 경고] 인물 ${scope}의 모든 데이터가 영구 삭제됩니다. 진행하시겠습니까?`)) return;
     await fetchApi('/backup/all', { method: 'DELETE' });
     window.location.reload();
   };
@@ -29,34 +29,34 @@ export default function BackupManager({ scope }) {
 
     try {
       await fetchApi('/backup/import', { method: 'POST', body: formData });
-      alert('복원이 성공적으로 완료되었습니다!');
+      alert('데이터 복원이 완료되었습니다.');
       window.location.reload();
     } catch (err) {
-      alert('가져오기 실패: 파일 형식이 잘못되었거나 규격에 맞지 않습니다.');
+      alert('가져오기 실패: 파일 스키마가 올바르지 않습니다.');
     } finally {
       fileInputRef.current.value = '';
     }
   };
 
   return (
-    <div style={{ background: '#ffffff', padding: '20px 24px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
+    <div style={{ backgroundColor: '#ffffff', padding: '16px 24px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' }}>
       <div>
-        <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', color: '#1e293b' }}>💾 데이터 백업 및 복구</h3>
-        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>현재 격리 범위: <strong>인물 {scope}</strong></p>
+        <h3 style={{ margin: '0 0 2px 0', fontSize: '0.95rem', fontWeight: '600', color: '#0f172a' }}>System Storage & Backup</h3>
+        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Current Isolated Workspace: <strong style={{ color: '#0f172a' }}>{scope}</strong></p>
       </div>
       
-      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-        <button onClick={handleExport} style={{ padding: '8px 14px', background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
-          📤 내보내기
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <button onClick={handleExport} style={{ padding: '8px 12px', backgroundColor: '#ffffff', color: '#334155', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '500', cursor: 'pointer' }}>
+          Export JSON
         </button>
         
         <input type="file" accept=".json" ref={fileInputRef} style={{ display: 'none' }} onChange={handleImport} />
-        <button onClick={() => fileInputRef.current.click()} style={{ padding: '8px 14px', background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
-          📥 가져오기
+        <button onClick={() => fileInputRef.current.click()} style={{ padding: '8px 12px', backgroundColor: '#ffffff', color: '#334155', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '500', cursor: 'pointer' }}>
+          Import JSON
         </button>
         
-        <button onClick={handleDeleteAll} style={{ padding: '8px 14px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
-          🗑️ 전체 삭제
+        <button onClick={handleDeleteAll} style={{ padding: '8px 12px', backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '500', cursor: 'pointer' }}>
+          Purge Data
         </button>
       </div>
     </div>

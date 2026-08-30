@@ -14,37 +14,121 @@ export default function App() {
   };
 
   return (
-    <div style={{ maxWidth: '850px', margin: '0 auto', padding: '30px 20px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', color: '#1e293b', background: '#f8fafc', minHeight: '100vh' }}>
-      
-      {/* 헤더 및 A/B 전환 탭 */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '20px 24px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '1.5rem', color: '#0f172a' }}>🎯 PDS 합격 플래너</h1>
-          <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>계획·수행·회고로 이어지는 스마트 학습 관리</p>
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '10px' }}>
-          <span style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569', paddingLeft: '8px' }}>검토 범위:</span>
-          <button 
-            onClick={() => handleScopeChange('A')} 
-            style={{ padding: '6px 14px', borderRadius: '8px', border: 'none', background: scope === 'A' ? '#4f46e5' : 'transparent', color: scope === 'A' ? '#fff' : '#64748b', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', transition: 'all 0.2s' }}
-          >
-            인물 A
-          </button>
-          <button 
-            onClick={() => handleScopeChange('B')} 
-            style={{ padding: '6px 14px', borderRadius: '8px', border: 'none', background: scope === 'B' ? '#4f46e5' : 'transparent', color: scope === 'B' ? '#fff' : '#64748b', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', transition: 'all 0.2s' }}
-          >
-            인물 B
-          </button>
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#f8fafc',
+      color: '#0f172a',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      WebkitFontSmoothing: 'antialiased',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      {/* 상단 네비게이션 바 */}
+      <header style={{
+        backgroundColor: '#ffffff',
+        borderBottom: '1px solid #e2e8f0',
+        position: 'sticky',
+        top: 0,
+        zIndex: 50,
+      }}>
+        <div style={{
+          maxWidth: '1200px',
+          margin: '0 auto',
+          padding: '0 24px',
+          height: '64px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              backgroundColor: '#0f172a',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              fontWeight: '700',
+              fontSize: '0.9rem'
+            }}>
+              P
+            </div>
+            <div>
+              <h1 style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#0f172a', letterSpacing: '-0.01em' }}>PDS Enterprise Planner</h1>
+            </div>
+          </div>
+
+          {/* 프로덕션 수준의 세그먼트 인물 전환 컨트롤 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{
+              display: 'flex',
+              backgroundColor: '#f1f5f9',
+              padding: '3px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0'
+            }}>
+              <button 
+                onClick={() => handleScopeChange('A')} 
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: scope === 'A' ? '#ffffff' : 'transparent',
+                  color: scope === 'A' ? '#0f172a' : '#64748b',
+                  fontWeight: scope === 'A' ? '600' : '500',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  boxShadow: scope === 'A' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1)' : 'none',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Workspace A
+              </button>
+              <button 
+                onClick={() => handleScopeChange('B')} 
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: scope === 'B' ? '#ffffff' : 'transparent',
+                  color: scope === 'B' ? '#0f172a' : '#64748b',
+                  fontWeight: scope === 'B' ? '600' : '500',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  boxShadow: scope === 'B' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1)' : 'none',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Workspace B
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
-      {/* 메인 컨텐츠 영역 */}
-      <main style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* 메인 컨테이너 (반응형 그리드 및 간격 최적화) */}
+      <main style={{
+        maxWidth: '1200px',
+        width: '100%',
+        margin: '0 auto',
+        padding: '32px 24px',
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '24px',
+        boxSizing: 'border-box'
+      }}>
         <BackupManager scope={scope} />
         
-        <div style={{ background: '#ffffff', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+        <div style={{
+          backgroundColor: '#ffffff',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0',
+          padding: '24px',
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)'
+        }}>
           <PlanToDoManager 
             scope={scope} 
             onSelectPlan={(id) => setCurrentPlanId(id)} 
@@ -52,11 +136,29 @@ export default function App() {
         </div>
 
         {currentPlanId && (
-          <div style={{ background: '#ffffff', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '2px solid #e0e7ff' }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '12px',
+            border: '1px solid #cbd5e1',
+            padding: '24px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+          }}>
             <SeeDashboard currentPlanId={currentPlanId} onNextPlanCreated={() => setCurrentPlanId(null)} />
           </div>
         )}
       </main>
+
+      {/* 푸터 */}
+      <footer style={{
+        borderTop: '1px solid #e2e8f0',
+        backgroundColor: '#ffffff',
+        padding: '20px 24px',
+        textAlign: 'center',
+        color: '#64748b',
+        fontSize: '0.8rem'
+      }}>
+        PDS System Core v2.4 • Server-Enforced Workspace Isolation Active
+      </footer>
     </div>
   );
 }
