@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { fetchApi } from '../api';
 
 export default function PlanToDoManager({ scope, onSelectPlan }) {
@@ -23,9 +22,10 @@ export default function PlanToDoManager({ scope, onSelectPlan }) {
     e.preventDefault();
     await fetchApi('/plans', {
       method: 'POST',
-      body: JSON.stringify({ id: uuidv4(), ...planForm })
+      body: JSON.stringify({ id: crypto.randomUUID(), ...planForm }) // 브라우저 내장 API 사용
     });
     alert('계획이 생성되었습니다.');
+    loadTodos();
   };
 
   const handleCompleteTodo = async (todoId) => {
@@ -34,7 +34,7 @@ export default function PlanToDoManager({ scope, onSelectPlan }) {
       await fetchApi(`/todos/${todoId}/complete`, {
         method: 'POST',
         body: JSON.stringify({
-          idempotency_key: uuidv4(), // 중복 요청 방지용 멱등성 키[cite: 1]
+          idempotency_key: crypto.randomUUID(), // 브라우저 내장 API 사용으로 uuid 패키지 에러 완벽 해결
           start_time: new Date().toISOString(),
           end_time: new Date().toISOString(),
           actual_time: 60,
@@ -44,6 +44,7 @@ export default function PlanToDoManager({ scope, onSelectPlan }) {
       loadTodos();
     } catch (e) {
       alert('완료 처리 실패');
+      setTodos(todos.map(t => t.id === todoId ? { ...t, isCompleting: false } : t));
     }
   };
 

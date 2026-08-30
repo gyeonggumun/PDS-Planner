@@ -27,7 +27,7 @@ export default function SeeDashboard({ currentPlanId, onNextPlanCreated }) {
         method: 'POST',
         body: JSON.stringify({
           title: nextPlanTitle,
-          success_criteria: `[회고 반영] ${adjustment}`, // 조정 1건을 다음 Plan으로 넘김
+          success_criteria: `[회고 반영] ${adjustment}`,
           period: '7일',
           expected_time: stats?.expected_time || 0,
         }),

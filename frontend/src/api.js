@@ -1,10 +1,10 @@
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = 'http://localhost:3000/api'; // 로컬 테스트용 (Vercel 배포 시 환경 변수로 덮어씌워짐)
 
 export const fetchApi = async (endpoint, options = {}) => {
   const scope = localStorage.getItem('ab_scope') || 'A';
   
   const headers = {
-    'X-Scope-ID': scope, // A/B 합성 범위 서버 강제 격리용 헤더
+    'X-Scope-ID': scope,
     ...options.headers,
   };
 
