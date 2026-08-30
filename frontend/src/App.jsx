@@ -1,35 +1,46 @@
-import { useState, useEffect } from 'react';
-import { fetchApi } from './api';
+import React, { useState } from 'react';
+import PlanToDoManager from './components/PlanToDoManager';
+import BackupManager from './components/BackupManager';
+import SeeDashboard from './components/SeeDashboard'; // 이전 답변의 컴포넌트
 
-function App() {
+export default function App() {
   const [scope, setScope] = useState(localStorage.getItem('ab_scope') || 'A');
-  const [data, setData] = useState(null);
+  const [currentPlanId, setCurrentPlanId] = useState(null);
 
-  const changeScope = (newScope) => {
+  const handleScopeChange = (newScope) => {
     localStorage.setItem('ab_scope', newScope);
     setScope(newScope);
+    setCurrentPlanId(null); // 범위가 바뀌면 현재 선택된 계획 초기화
+    alert(`${newScope} 인물로 검토 범위를 전환했습니다.`);
   };
-
-  const loadData = async () => {
-    const result = await fetchApi('/todos');
-    setData(result);
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [scope]);
 
   return (
-    <div>
-      <h1>PDS Planner 심사 화면</h1>
-      <div style={{ marginBottom: '20px' }}>
-        <button onClick={() => changeScope('A')} disabled={scope === 'A'}>A 인물로 보기</button>
-        <button onClick={() => changeScope('B')} disabled={scope === 'B'}>B 인물로 보기</button>
-      </div>
-      <p>현재 상태: <strong>{scope}</strong></p>
-      <pre>{JSON.stringify(data, null, 2)}</pre>
+    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px', fontFamily: 'sans-serif' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
+        <h1>자격증 합격 플래너</h1>
+        
+        {/* A/B 격리 전환 버튼 */}
+        <div>
+          <span style={{ marginRight: '10px' }}>현재 사용자: <strong>{scope}</strong></span>
+          <button onClick={() => handleScopeChange('A')} disabled={scope === 'A'}>A로 보기</button>
+          <button onClick={() => handleScopeChange('B')} disabled={scope === 'B'}>B로 보기</button>
+        </div>
+      </header>
+
+      <main style={{ marginTop: '20px' }}>
+        <BackupManager scope={scope} />
+        <hr style={{ margin: '20px 0' }} />
+        
+        <PlanToDoManager 
+          scope={scope} 
+          onSelectPlan={(id) => setCurrentPlanId(id)} 
+        />
+        <hr style={{ margin: '20px 0' }} />
+
+        {currentPlanId && (
+          <SeeDashboard currentPlanId={currentPlanId} />
+        )}
+      </main>
     </div>
   );
 }
-
-export default App;
