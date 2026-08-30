@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import PlanToDoManager from './components/PlanToDoManager';
 import BackupManager from './components/BackupManager';
-import SeeDashboard from './components/SeeDashboard'; // 이전 답변의 컴포넌트
+import SeeDashboard from './components/SeeDashboard'; // 이전 답변에서 만든 컴포넌트
 
 export default function App() {
   const [scope, setScope] = useState(localStorage.getItem('ab_scope') || 'A');
