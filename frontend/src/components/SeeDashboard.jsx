@@ -1,122 +1,64 @@
 import React, { useState, useEffect } from 'react';
+import { fetchApi } from '../api';
 
 export default function SeeDashboard({ currentPlanId, onNextPlanCreated }) {
   const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [adjustment, setAdjustment] = useState('');
   const [nextPlanTitle, setNextPlanTitle] = useState('');
 
-  // 1. See 집계 데이터 불러오기
   useEffect(() => {
-    const fetchStats = async () => {
+    const loadStats = async () => {
       try {
-        const scope = localStorage.getItem('ab_scope') || 'A';
-        const response = await fetch(`http://localhost:3000/api/plans/${currentPlanId}/see`, {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Scope-ID': scope, // A/B 격리 강제 헤더
-          },
-        });
-
-        if (response.status === 403 || response.status === 404) {
-          alert('접근이 거부되었습니다. (반대 범위의 데이터)');
-          return;
-        }
-
-        const data = await response.json();
+        const data = await fetchApi(`/plans/${currentPlanId}/see`);
         setStats(data);
-      } catch (error) {
-        console.error('집계 데이터를 불러오는 중 오류 발생:', error);
-      } finally {
-        setLoading(false);
+      } catch (e) {
+        console.error(e);
       }
     };
-
-    if (currentPlanId) fetchStats();
+    if (currentPlanId) loadStats();
   }, [currentPlanId]);
 
-  // 2. 조정 내용을 반영한 다음 Plan 생성 로직 (T06-C33 충족)
   const handleCreateNextPlan = async (e) => {
     e.preventDefault();
-    if (!nextPlanTitle || !adjustment) {
-      alert('다음 계획 제목과 조정 내용을 모두 입력해주세요.');
-      return;
-    }
+    if (!nextPlanTitle || !adjustment) return alert('제목과 조정 내용을 입력하세요.');
 
     try {
-      const scope = localStorage.getItem('ab_scope') || 'A';
-      const response = await fetch('http://localhost:3000/api/plans', {
+      await fetchApi('/plans', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Scope-ID': scope,
-        },
         body: JSON.stringify({
           title: nextPlanTitle,
-          // 이전 See 단계에서 얻은 조정 결과를 다음 계획의 성공 기준이나 메모로 넘김
-          success_criteria: `[이전 회고 반영] ${adjustment}`,
-          period: '7일', // 예시값
-          expected_time: stats.expected_time,
+          success_criteria: `[회고 반영] ${adjustment}`, // 조정 1건을 다음 Plan으로 넘김
+          period: '7일',
+          expected_time: stats?.expected_time || 0,
         }),
       });
-
-      if (response.ok) {
-        alert('조정 내용이 반영된 다음 Plan이 생성되었습니다!');
-        setAdjustment('');
-        setNextPlanTitle('');
-        if (onNextPlanCreated) onNextPlanCreated();
-      }
-    } catch (error) {
-      console.error('다음 Plan 생성 중 오류:', error);
+      alert('조정 내용이 반영된 새 Plan이 생성되었습니다!');
+      setAdjustment('');
+      setNextPlanTitle('');
+      if (onNextPlanCreated) onNextPlanCreated();
+    } catch (e) {
+      alert('생성 실패');
     }
   };
 
-  if (loading) return <div>집계 데이터를 불러오는 중...</div>;
-  if (!stats) return <div>데이터가 없습니다.</div>;
+  if (!stats) return <div>데이터 로딩 중...</div>;
 
   return (
-    <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px', maxWidth: '600px' }}>
-      <h2>📊 See: 실행 결과 회고 (Plan ID: {stats.plan_id})</h2>
-      
-      {/* 집계 대시보드 (T06-C28 ~ C32) */}
-      <ul style={{ listStyle: 'none', padding: 0, lineHeight: '1.8' }}>
-        <li><strong>전체 계획 수:</strong> {stats.total_todos}건</li>
-        <li><strong>완료 수:</strong> {stats.completed_todos}건</li>
-        <li><strong>지연 수:</strong> <span style={{ color: 'red' }}>{stats.delayed_todos}건</span> (마감일 경과)</li>
+    <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px' }}>
+      <h2>📊 See: 실행 결과 회고</h2>
+      <ul>
+        <li><strong>전체 할 일:</strong> {stats.total_todos}건</li>
+        <li><strong>지연 수:</strong> <span style={{ color: 'red' }}>{stats.delayed_todos}건</span></li>
         <li><strong>막힘 수:</strong> <span style={{ color: 'orange' }}>{stats.blocked_todos}건</span></li>
-        <hr style={{ margin: '15px 0' }} />
-        <li><strong>예상 소요 시간:</strong> {stats.expected_time}분</li>
-        <li><strong>실제 소요 시간:</strong> {stats.actual_time}분</li>
-        <li>
-          <strong>오차(실제-예상):</strong>{' '}
-          <span style={{ color: stats.diff_time > 0 ? 'red' : 'blue' }}>
-            {stats.diff_time > 0 ? `+${stats.diff_time}` : stats.diff_time}분
-          </span>
-        </li>
+        <li><strong>예상 시간:</strong> {stats.expected_time}분 / <strong>실제 시간:</strong> {stats.actual_time}분</li>
+        <li><strong>시간 오차:</strong> {stats.diff_time}분</li>
       </ul>
-
-      <hr style={{ margin: '20px 0' }} />
-
-      {/* 다음 Plan으로 조정 내용 넘기기 폼 (T06-C33) */}
-      <h3>🔄 다음 Plan 계획하기</h3>
+      <hr />
+      <h3>🔄 다음 Plan에 반영하기</h3>
       <form onSubmit={handleCreateNextPlan} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <input 
-          type="text" 
-          placeholder="다음 계획 제목 (예: 정보처리기사 2주차)" 
-          value={nextPlanTitle}
-          onChange={(e) => setNextPlanTitle(e.target.value)}
-          style={{ padding: '8px' }}
-        />
-        <textarea 
-          placeholder="데이터를 보고 얻은 결론과 다음 계획 조정 내용을 적어주세요. (예: 예상보다 오답 노트 작성 시간이 30분 더 걸림. 다음엔 배정 시간을 늘리겠음)" 
-          value={adjustment}
-          onChange={(e) => setAdjustment(e.target.value)}
-          rows="3"
-          style={{ padding: '8px' }}
-        />
-        <button type="submit" style={{ padding: '10px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-          조정 내용 반영하여 새 Plan 만들기
-        </button>
+        <input value={nextPlanTitle} onChange={e => setNextPlanTitle(e.target.value)} placeholder="다음 계획 제목" />
+        <textarea value={adjustment} onChange={e => setAdjustment(e.target.value)} placeholder="회고를 통한 다음 계획 조정 내용 작성" />
+        <button type="submit">반영하여 새 Plan 만들기</button>
       </form>
     </div>
   );
