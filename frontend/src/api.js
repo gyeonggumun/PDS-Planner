@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3000/api'; // 로컬 테스트용 (Vercel 배포 시 환경 변수로 덮어씌워짐)
+const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
 export const fetchApi = async (endpoint, options = {}) => {
   const scope = localStorage.getItem('ab_scope') || 'A';
