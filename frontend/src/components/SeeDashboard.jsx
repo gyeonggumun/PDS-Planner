@@ -1,104 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { fetchApi } from '../api';
+import { supabase } from '../supabase';
 
 export default function SeeDashboard({ currentPlanId, onNextPlanCreated }) {
-  const [stats, setStats] = useState(null);
-  const [adjustment, setAdjustment] = useState('');
-  const [nextPlanTitle, setNextPlanTitle] = useState('');
+  const [report, setReport] = useState(null);
 
   useEffect(() => {
-    const loadStats = async () => {
-      try {
-        const data = await fetchApi(`/plans/${currentPlanId}/see`);
-        setStats(data);
-      } catch (e) {
-        console.error(e);
-      }
-    };
-    if (currentPlanId) loadStats();
+    if (currentPlanId) generateReport(currentPlanId);
   }, [currentPlanId]);
 
-  const handleCreateNextPlan = async (e) => {
-    e.preventDefault();
-    if (!nextPlanTitle || !adjustment) return alert('제목과 조정 내용을 입력하세요.');
+  const generateReport = async (planId) => {
+    const { data: todos } = await supabase.from('todos').select('*').eq('plan_id', planId);
+    const { data: dos } = await supabase.from('dos').select('*, todos!inner(*)').eq('todos.plan_id', planId);
 
-    try {
-      await fetchApi('/plans', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: nextPlanTitle,
-          success_criteria: `[회고 반영] ${adjustment}`,
-          period: '7일',
-          expected_time: stats?.expected_time || 0,
-        }),
-      });
-      alert('회고 내용이 반영된 신규 Plan이 생성되었습니다.');
-      setAdjustment('');
-      setNextPlanTitle('');
-      if (onNextPlanCreated) onNextPlanCreated();
-    } catch (e) {
-      alert('생성 실패');
-    }
+    if (!todos) return;
+
+    const total_todos = todos.length;
+    const completed_todos = todos.filter(t => t.status === 'completed').length;
+    const delayed_todos = todos.filter(t => t.status !== 'completed' && t.deadline && new Date(t.deadline) < new Date()).length;
+    
+    const dosList = dos || [];
+    const blocked_todos = dosList.filter(d => d.block_reason && d.block_reason.trim() !== '').length;
+    const expected_time = todos.reduce((acc, t) => acc + (t.expected_time || 0), 0);
+    const actual_time = dosList.reduce((acc, d) => acc + (d.actual_time || 0), 0);
+    const diff_time = actual_time - expected_time;
+
+    setReport({ total_todos, completed_todos, delayed_todos, blocked_todos, expected_time, actual_time, diff_time });
   };
 
-  if (!stats) return <div style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>지표 분석 로딩 중...</div>;
+  if (!report) return <div>회고 데이터를 불러오는 중...</div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px' }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600', color: '#0f172a' }}>See: Performance & Analytics</h3>
-          <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>계획 대비 실행 오차를 분석하고 다음 주기로 피드백을 전달합니다.</p>
-        </div>
-        <span style={{ fontSize: '0.75rem', backgroundColor: '#f8fafc', color: '#334155', padding: '4px 8px', borderRadius: '4px', fontWeight: '600', border: '1px solid #cbd5e1' }}>
-          Target ID: {stats.plan_id.slice(0, 8)}
-        </span>
-      </div>
-
-      {/* KPI 카드 그리드 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
-        <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>Total Tasks</div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#0f172a' }}>{stats.total_todos} <span style={{ fontSize: '0.8rem', fontWeight: '400', color: '#64748b' }}>건</span></div>
-        </div>
-        <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#dc2626', textTransform: 'uppercase', marginBottom: '6px' }}>Delayed</div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#dc2626' }}>{stats.delayed_todos} <span style={{ fontSize: '0.8rem', fontWeight: '400', color: '#64748b' }}>건</span></div>
-        </div>
-        <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#d97706', textTransform: 'uppercase', marginBottom: '6px' }}>Blocked</div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#d97706' }}>{stats.blocked_todos} <span style={{ fontSize: '0.8rem', fontWeight: '400', color: '#64748b' }}>건</span></div>
-        </div>
-        <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#0f172a', textTransform: 'uppercase', marginBottom: '6px' }}>Time Variance</div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: stats.diff_time > 0 ? '#dc2626' : '#16a34a' }}>
-            {stats.diff_time > 0 ? `+${stats.diff_time}` : stats.diff_time} <span style={{ fontSize: '0.8rem', fontWeight: '400', color: '#64748b' }}>분</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 다음 Plan 수립 폼 */}
-      <div style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0', marginTop: '8px' }}>
-        <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', fontWeight: '600', color: '#334155' }}>Create Iteration Plan based on Insights</h4>
-        <form onSubmit={handleCreateNextPlan} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <input 
-            value={nextPlanTitle} 
-            onChange={e => setNextPlanTitle(e.target.value)} 
-            placeholder="다음 계획 주기 제목 (예: 정보처리기사 실기 2주차)" 
-            style={{ padding: '10px 14px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9kt', backgroundColor: '#ffffff', outline: 'none' }}
-          />
-          <textarea 
-            value={adjustment} 
-            onChange={e => setAdjustment(e.target.value)} 
-            placeholder="회고 내용 및 다음 주기 반영 사항 작성..." 
-            rows="3"
-            style={{ padding: '10px 14px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem', backgroundColor: '#ffffff', outline: 'none', resize: 'vertical' }}
-          />
-          <button type="submit" style={{ padding: '10px 16px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '500', cursor: 'pointer', fontSize: '0.9rem', alignSelf: 'flex-end' }}>
-            회고 반영 후 다음 Plan 생성
-          </button>
-        </form>
-      </div>
+    <div>
+      <h2 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>See: 회고 및 분석 리포트</h2>
+      <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px 0' }}>
+        <li style={{ padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>총 ToDo 수: <strong>{report.total_todos}</strong>건</li>
+        <li style={{ padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>완료된 ToDo: <strong>{report.completed_todos}</strong>건</li>
+        <li style={{ padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>지연된 ToDo: <strong style={{ color: '#dc2626' }}>{report.delayed_todos}</strong>건</li>
+        <li style={{ padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>블로커 발생 건수: <strong style={{ color: '#d97706' }}>{report.blocked_todos}</strong>건</li>
+        <li style={{ padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>예상 소요 시간: <strong>{report.expected_time}</strong>분</li>
+        <li style={{ padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>실제 소요 시간: <strong>{report.actual_time}</strong>분</li>
+        <li style={{ padding: '8px 0' }}>시간 차이: <strong style={{ color: report.diff_time > 0 ? '#dc2626' : '#10b981' }}>{report.diff_time > 0 ? `+${report.diff_time}` : report.diff_time}</strong>분</li>
+      </ul>
+      <button onClick={onNextPlanCreated} style={{ padding: '10px 20px', backgroundColor: '#0f172a', color: '#ffffff', border: 'none', borderRadius: '6px' }}>다음 Plan 작성하기</button>
     </div>
   );
 }
