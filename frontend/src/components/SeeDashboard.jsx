@@ -19,10 +19,13 @@ export default function SeeDashboard({ currentPlanId, onNextPlanCreated }) {
         const dosList = dos || [];
         const blocked_todos = dosList.filter(d => d.block_reason && d.block_reason.trim() !== '').length;
         const expected_time = todos.reduce((acc, t) => acc + (t.expected_time || 0), 0);
+        
+        // 합계 및 평균 계산 추가
         const actual_time = dosList.reduce((acc, d) => acc + (d.actual_time || 0), 0);
+        const avg_time = total_todos > 0 ? Math.round(actual_time / total_todos) : 0;
         const diff_time = actual_time - expected_time;
 
-        setStats({ plan_id: currentPlanId, total_todos, delayed_todos, blocked_todos, expected_time, diff_time });
+        setStats({ plan_id: currentPlanId, total_todos, delayed_todos, blocked_todos, expected_time, actual_time, avg_time, diff_time });
       } catch (e) { console.error(e); }
     };
     if (currentPlanId) loadStats();
@@ -66,14 +69,19 @@ export default function SeeDashboard({ currentPlanId, onNextPlanCreated }) {
           <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>Total Tasks</div>
           <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#0f172a' }}>{stats.total_todos} <span style={{ fontSize: '0.8rem', fontWeight: '400', color: '#64748b' }}>건</span></div>
         </div>
-        <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#dc2626', textTransform: 'uppercase', marginBottom: '6px' }}>Delayed</div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#dc2626' }}>{stats.delayed_todos} <span style={{ fontSize: '0.8rem', fontWeight: '400', color: '#64748b' }}>건</span></div>
+        
+        {/* 총 합계 카드 추가 */}
+        <div style={{ backgroundColor: '#eff6ff', padding: '16px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#1d4ed8', textTransform: 'uppercase', marginBottom: '6px' }}>Total Time (합계)</div>
+          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1d4ed8' }}>{stats.actual_time} <span style={{ fontSize: '0.8rem', fontWeight: '400', color: '#3b82f6' }}>분</span></div>
         </div>
-        <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#d97706', textTransform: 'uppercase', marginBottom: '6px' }}>Blocked</div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#d97706' }}>{stats.blocked_todos} <span style={{ fontSize: '0.8rem', fontWeight: '400', color: '#64748b' }}>건</span></div>
+
+        {/* 평균 카드 추가 */}
+        <div style={{ backgroundColor: '#f0fdf4', padding: '16px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#15803d', textTransform: 'uppercase', marginBottom: '6px' }}>Daily Avg (평균)</div>
+          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#15803d' }}>{stats.avg_time} <span style={{ fontSize: '0.8rem', fontWeight: '400', color: '#22c55e' }}>분</span></div>
         </div>
+
         <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#0f172a', textTransform: 'uppercase', marginBottom: '6px' }}>Time Variance</div>
           <div style={{ fontSize: '1.25rem', fontWeight: '700', color: stats.diff_time > 0 ? '#dc2626' : '#16a34a' }}>
